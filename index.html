@@ -136,40 +136,343 @@ const SUPABASE_URL = 'https://xeqsoftmkutpezzilxjmb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_recJqXh_JuHf9Cb8E_zuJA_RJVMQUo7';
 
 const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  { auth: { persistSession: true } }
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    { auth: { persistSession: true } }
 );
-let currentUser=null,currentRole=null,currentClientId=null,clients=[],currentProgram=null,currentDayIndex=0,restTimerInterval=null,restSeconds=60;
-const $=id=>document.getElementById(id);
-const toast=(msg)=>{const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._timeout);el._timeout=setTimeout(()=>el.classList.remove('show'),2000);};
-let isSignUp=false;
-$('authSwitchLink').addEventListener('click',()=>{isSignUp=!isSignUp;$('authSubmit').textContent=isSignUp?'Sign up':'Sign in';$('authSwitchText').textContent=isSignUp?'Already have an account?':"Don't have an account?";$('authSwitchLink').textContent=isSignUp?'Sign in':'Sign up';$('authError').textContent='';});
-$('authSubmit').addEventListener('click',async()=>{const email=$('authEmail').value.trim(),password=$('authPassword').value.trim();if(!email||!password){$('authError').textContent='Please enter email and password.';return;}$('authError').textContent='';$('authSubmit').disabled=true;$('authSubmit').textContent='...';try{let result;if(isSignUp){result=await supabase.auth.signUp({email,password});if(result.error)throw result.error;toast('Check your email to confirm!');$('authSubmit').disabled=false;$('authSubmit').textContent='Sign up';return;}else{result=await supabase.auth.signInWithPassword({email,password});if(result.error)throw result.error;}currentUser=result.data.user;await loadUserRole();}catch(e){$('authError').textContent=e.message||'Authentication failed.';$('authSubmit').disabled=false;$('authSubmit').textContent=isSignUp?'Sign up':'Sign in';}});
-async function checkSession(){const{data}=await supabase.auth.getSession();if(data.session){currentUser=data.session.user;await loadUserRole();return true;}return false;}
-async function loadUserRole(){if(!currentUser)return;const{data:coachData}=await supabase.from('coaches').select('*').eq('user_id',currentUser.id).single();if(coachData){currentRole='coach';showCoachUI();loadClients();return;}const{data:clientData}=await supabase.from('clients').select('*').eq('user_id',currentUser.id).single();if(clientData){currentRole='client';currentClientId=clientData.id;showClientUI();loadClientProgram(clientData.id);return;}const{error}=await supabase.from('coaches').insert([{user_id:currentUser.id,name:currentUser.email?.split('@')[0]||'Coach'}]);if(!error){currentRole='coach';showCoachUI();loadClients();}else{toast('Error setting up profile.');}}
-function showCoachUI(){$('authPage').style.display='none';$('mainContent').style.display='block';$('header').style.display='flex';$('roleBadge').textContent='Coach';showView('dashboard');}
-function showClientUI(){$('authPage').style.display='none';$('mainContent').style.display='block';$('header').style.display='flex';$('roleBadge').textContent='Client';showView('tracker');}
-function showView(view){['dashboardView','detailView','builderView','trackerView'].forEach(id=>$(id).style.display=id===view?'block':'none');}
-async function loadClients(){if(currentRole!=='coach')return;const{data,error}=await supabase.from('clients').select('*').eq('coach_id',currentUser.id);if(error){toast('Error loading clients');return;}clients=data||[];renderClients();updateStats();}
-function renderClients(filter='all'){const grid=$('clientGrid');let filtered=clients;if(filter==='active')filtered=clients.filter(c=>c.status==='active');else if(filter==='quiet')filtered=clients.filter(c=>c.status==='quiet');if(!filtered.length){grid.innerHTML='<div class="text-muted text-center" style="padding:60px 20px;">No clients found.</div>';return;}grid.innerHTML=filtered.map(c=>`<div class="client-card" data-id="${c.id}"><div class="name">${c.name||'Unnamed'}</div><div class="meta">${c.type||'Client'} · Last seen: ${c.last_seen||'—'}</div><div class="flex gap-8" style="margin-top:10px;"><span class="badge ${c.status==='active'?'badge-green':'badge-amber'}"><span class="dot ${c.status==='active'?'dot-green':'dot-amber'}"></span> ${c.status||'New'}</span>${c.has_pb?'<span class="badge badge-blue">🏆 PB</span>':''}</div></div>`).join('');grid.querySelectorAll('.client-card').forEach(el=>el.addEventListener('click',()=>{const id=el.dataset.id;const client=clients.find(c=>c.id===id);if(client)openClientDetail(client);}));}
-function updateStats(){$('statTotal').textContent=clients.length;$('statActive').textContent=clients.filter(c=>c.status==='active').length;$('statQuiet').textContent=clients.filter(c=>c.status==='quiet').length;$('statPBs').textContent=clients.filter(c=>c.has_pb).length;$('clientCount').textContent=`${clients.length} client${clients.length!==1?'s':''}`;}
-document.querySelectorAll('.filter-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderClients(btn.dataset.filter);}));
-async function openClientDetail(client){currentClientId=client.id;showView('detailView');$('detailName').textContent=client.name||'Unnamed';$('detailMeta').textContent=`Last seen: ${client.last_seen||'—'} · ${client.type||'Client'}`;await loadClientDetail(client.id);document.querySelectorAll('.detail-tab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.detail-tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));const target=$(`tab-${tab.dataset.tab}`);if(target)target.classList.add('active');}));}
-async function loadClientDetail(clientId){const{data:progData}=await supabase.from('programs').select('*').eq('client_id',clientId).order('created_at',{ascending:false}).limit(1);if(progData&&progData.length){currentProgram=progData[0];let days;try{days=typeof currentProgram.days==='string'?JSON.parse(currentProgram.days):currentProgram.days;}catch(e){days=[];}$('tab-program').innerHTML=days.map((d,i)=>`<div style="background:#fff;border:1px solid #E3E6EE;border-radius:12px;margin-bottom:12px;overflow:hidden;"><div style="background:#141414;color:#fff;padding:10px 16px;font-weight:800;">${d.name||`Day ${i+1}`}</div>${(d.exercises||[]).map(ex=>`<div style="padding:10px 16px;border-top:1px solid #E3E6EE;display:flex;justify-content:space-between;align-items:center;"><div><strong>${ex.name||'Exercise'}</strong><div class="text-muted text-sm">${ex.sets||'—'} × ${ex.reps||'—'} · rest ${ex.rest||'—'}s</div>${ex.guide?`<div class="text-sm" style="color:#0066FF;">@${ex.guide}</div>`:''}</div><span class="badge badge-grey">${ex.sets||'—'} sets</span></div>`).join('')}</div>`).join('');}else{$('tab-program').innerHTML='<p class="text-muted">No program assigned.</p>';}const{data:sessions}=await supabase.from('workout_sessions').select('*').eq('client_id',clientId).order('date',{ascending:false}).limit(10);if(sessions&&sessions.length){$('tab-progress').innerHTML=sessions.map(s=>`<div style="padding:8px 0;border-bottom:1px solid #E3E6EE;"><strong>${s.date||'—'}</strong> · ${s.exercises_completed||0} exercises</div>`).join('');}else{$('tab-progress').innerHTML='<p class="text-muted">No sessions logged yet.</p>';}$('tab-overview').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;"><div style="background:#fff;padding:16px;border-radius:12px;border:1px solid #E3E6EE;"><div class="text-muted text-xs">Adherence</div><div class="fw-900" style="font-size:24px;">${client.adherence||'—'}</div></div><div style="background:#fff;padding:16px;border-radius:12px;border:1px solid #E3E6EE;"><div class="text-muted text-xs">Current Weight</div><div class="fw-900" style="font-size:24px;">${client.current_weight||'—'} kg</div></div><div style="background:#fff;padding:16px;border-radius:12px;border:1px solid #E3E6EE;"><div class="text-muted text-xs">Goal</div><div class="fw-900" style="font-size:24px;">${client.goal||'—'}</div></div></div>`;}
-$('backToDashboard').addEventListener('click',()=>showView('dashboard'));$('builderBack').addEventListener('click',()=>showView('dashboard'));$('trackerBack').addEventListener('click',()=>{if(currentRole==='client')showView('tracker');else showView('dashboard');});
-$('newClientBtn').addEventListener('click',async()=>{const name=prompt('Client name:');if(!name)return;const type=confirm('Online client? (Cancel for Face-to-Face)')?'online':'face-to-face';const{error}=await supabase.from('clients').insert([{name,type,coach_id:currentUser.id,status:'active',created_at:new Date().toISOString()}]);if(error){toast('Error: '+error.message);return;}toast('Client added!');loadClients();});
-$('assignProgramBtn').addEventListener('click',()=>{if(!currentClientId){toast('No client selected');return;}showView('builderView');$('builderInput').value='';$('builderPreview').innerHTML='<div class="text-muted text-center" style="padding:60px 20px;">Build a program and save it to assign to this client.</div>';toast('Build a program and click Save Program');});
-$('newProgramBtn').addEventListener('click',()=>{showView('builderView');$('builderInput').value='';$('builderPreview').innerHTML='<div class="text-muted text-center" style="padding:60px 20px;">Paste a program and click Parse</div>';});
-$('clearBuilderBtn').addEventListener('click',()=>{$('builderInput').value='';$('builderPreview').innerHTML='<div class="text-muted text-center" style="padding:60px 20px;">Paste a program and click Parse</div>';});
-$('loadExampleBtn').addEventListener('click',()=>{$('builderInput').value=`Dinny – Next 6 Weeks (Hypertrophy)\n\nDay 1 – Chest & Arms\n• Flat Barbell Bench Press – 4×6-8 @70kg\n70 / 75 / 77.5 / 80\n• Weighted Pull-Ups – 4×6-8 rest 150\n5 / 5 / 7.5 / 10\n\nDay 2 – Quads & Shoulders\n• Hack Squat – 4×6-8\n60 / 70 / 70 / 75\n• Barbell Squat – 3×8-10 @60\n\nProgression\n• Hit the top of the rep range on every set → add weight next week.`;toast('Example loaded');});
-function parseProgram(text){const lines=text.split(/\r?\n/);let programName='Program';const days=[];let cur=null,curEx=null;const trailer=[];let inTrailer=false;const HEADER_RE=/^\s*(day\s*\d+|week\s*\d+)\b/i;const SETSREPS_RE=/(\d+)\s*[x×]\s*([\d]+(?:\s*[–—-]\s*\d+)?(?:\s*\+)?(?:\s*(?:each|each side|es|\/side))?)/i;const REST_RE=/rest\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds|m|min|mins)?/i;const RESTSHORT_RE=/\b(\d+(?:\.\d+)?)\s*(s|sec|secs|min|mins)\b/i;const GUIDE_RE=/@\s*(\d+(?:\.\d+)?)\s*(kg|lbs|lb)?/i;const WEIGHTS_RE=/^[\s\d.,\/\+xX×kglbs()°-]+$/;const TRAILER_RE=/^(progression|goals?|\d+\s*-?\s*week goals|notes?)\b/i;const toRestSeconds=(v,u)=>{v=parseFloat(v);if(!u)return v>=20?Math.round(v):Math.round(v*60);u=u.toLowerCase();return u.startsWith('m')?Math.round(v*60):Math.round(v);};const splitWeights=(line)=>line.trim().split(/[\/,]/).map(s=>s.trim()).filter(Boolean);const cleanName=(s)=>{let n=s.replace(/^[•\-\*]\s*/,'').replace(GUIDE_RE,'').replace(SETSREPS_RE,'').replace(REST_RE,'').replace(RESTSHORT_RE,'').replace(/[–—]/g,' ').replace(/\s*[-]\s*$/,'').replace(/[:•×]\s*$/,'').replace(/\s{2,}/g,' ').trim();return n||'Exercise';};const looksLikeExercise=(t)=>{if(!t)return false;if(WEIGHTS_RE.test(t)&&!SETSREPS_RE.test(t))return false;return /^[•\-\*]/.test(t)||SETSREPS_RE.test(t)||(/[a-z]/i.test(t)&&t.split(/\s+/).length<=8);};for(const l of lines){const t=l.trim();if(t&&!HEADER_RE.test(t)){programName=t.replace(/[–—]/g,'–').trim();break;}}lines.forEach((line,idx)=>{const t=line.trim();if(!t)return;if(idx===0&&!HEADER_RE.test(t))return;if(TRAILER_RE.test(t))inTrailer=true;if(inTrailer){trailer.push(t);return;}if(HEADER_RE.test(t)){cur={name:t.replace(/^[•\-\*]\s*/,'').trim(),exercises:[]};days.push(cur);curEx=null;return;}if(!cur){cur={name:'Day 1',exercises:[]};days.push(cur);}if(WEIGHTS_RE.test(t)&&!SETSREPS_RE.test(t)){if(curEx){const w=splitWeights(t);if(!curEx.weeks||!curEx.weeks.length)curEx.weeks=w;else curEx.note=(curEx.note?curEx.note+'\n':'')+t;}else{cur._pre=(cur._pre?cur._pre+'\n':'')+t;}return;}if(looksLikeExercise(t)){const sr=t.match(SETSREPS_RE);const restM=t.match(REST_RE)||t.match(RESTSHORT_RE);const g=t.match(GUIDE_RE);const ex={name:cleanName(t)||'Exercise',sets:sr?sr[1]:'',reps:sr?sr[2].replace(/\s+/g,''):'',rest:restM?toRestSeconds(restM[1],restM[2]):'',guide:g?(g[1]+(g[2]||'kg')):'',weeks:[],note:'',uncertain:!sr};let after=t;if(sr)after=after.slice(after.indexOf(sr[0])+sr[0].length);after=after.replace(REST_RE,'').replace(GUIDE_RE,'').replace(/^[\s–—:-]+/,'').trim();if(after&&/[a-z]/i.test(after)&&after.length>2)ex.note=after;cur.exercises.push(ex);curEx=ex;return;}if(curEx){curEx.note=(curEx.note?curEx.note+'\n':'')+t;}else if(cur){cur._pre=(cur._pre?cur._pre+'\n':'')+t;}});days.forEach(d=>{if(d._pre&&d.exercises[0]){d.exercises[0].note=d._pre+(d.exercises[0].note?'\n'+d.exercises[0].note:'');}delete d._pre;});return{programName,days,trailer};}
-$('parseBtn').addEventListener('click',()=>{const text=$('builderInput').value.trim();if(!text){toast('Paste a program first');return;}const result=parseProgram(text);const preview=$('builderPreview');if(!result.days.length){preview.innerHTML='<div class="text-muted text-center" style="padding:60px 20px;">No days/exercises parsed. Check your format.</div>';return;}window._parsedProgram=result;preview.innerHTML=`<div class="fw-800" style="font-size:18px;">${result.programName}</div><div class="text-muted text-sm">${result.days.length} day${result.days.length>1?'s':''} · ${result.days.reduce((n,d)=>n+d.exercises.length,0)} exercises</div>${result.days.map((d,i)=>`<div style="background:var(--bg);border-radius:8px;padding:12px;margin:8px 0;"><div class="fw-800">${d.name||`Day ${i+1}`}</div>${d.exercises.map(ex=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);font-size:13px;"><span>${ex.name}</span><span class="text-muted">${ex.sets}×${ex.reps} ${ex.guide?'@'+ex.guide:''}</span></div>`).join('')}</div>`).join('')}${result.trailer.length?`<div class="text-muted text-xs mt-8">Notes: ${result.trailer.join(' · ')}</div>`:''}<button class="btn btn-primary btn-sm mt-8" id="saveParsedBtn">Save Program</button>`;setTimeout(()=>{const saveBtn=$('saveParsedBtn');if(saveBtn)saveBtn.addEventListener('click',saveParsedProgram);},50);});
-async function saveParsedProgram(){const prog=window._parsedProgram;if(!prog){toast('No program to save');return;}if(currentRole==='client'){toast('Clients cannot save programs');return;}const clientId=currentClientId;if(!clientId){toast('No client selected. Open a client first.');return;}const{error}=await supabase.from('programs').insert([{client_id:clientId,name:prog.programName,days:JSON.stringify(prog.days),trailer:prog.trailer,created_by:currentUser.id}]);if(error){toast('Error saving: '+error.message);return;}toast('Program saved and assigned!');showView('detailView');loadClientDetail(clientId);}
-$('saveProgramBtn').addEventListener('click',saveParsedProgram);
-$('assessBtn').addEventListener('click',()=>{if(!currentClientId){toast('No client selected');return;}toast('📊 Assessment tools will open in a new window');const src=document.getElementById('src-posture')?.textContent;if(src){const win=window.open('','_blank');if(win){win.document.write(src);win.document.close();}}});
-$('logoutBtn').addEventListener('click',async()=>{await supabase.auth.signOut();location.reload();});
-checkSession();
-</script>
-</body>
-</html>
+
+let currentUser = null;
+let currentRole = null;
+let currentClientId = null;
+let clients = [];
+let currentProgram = null;
+let currentDayIndex = 0;
+let restTimerInterval = null;
+let restSeconds = 60;
+
+const $ = id => document.getElementById(id);
+
+const toast = (msg) => {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._timeout);
+    el._timeout = setTimeout(() => el.classList.remove('show'), 2000);
+};
+
+let isSignUp = false;
+
+$('authSwitchLink').addEventListener('click', () => {
+    isSignUp = !isSignUp;
+    $('authSubmit').textContent = isSignUp ? 'Sign up' : 'Sign in';
+    $('authSwitchText').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
+    $('authSwitchLink').textContent = isSignUp ? 'Sign in' : 'Sign up';
+    $('authError').textContent = '';
+});
+
+$('authSubmit').addEventListener('click', async () => {
+    const email = $('authEmail').value.trim();
+    const password = $('authPassword').value.trim();
+    if (!email || !password) {
+        $('authError').textContent = 'Please enter email and password.';
+        return;
+    }
+    $('authError').textContent = '';
+    $('authSubmit').disabled = true;
+    $('authSubmit').textContent = '...';
+    try {
+        let result;
+        if (isSignUp) {
+            result = await supabase.auth.signUp({ email, password });
+            if (result.error) throw result.error;
+            toast('Check your email to confirm!');
+            $('authSubmit').disabled = false;
+            $('authSubmit').textContent = 'Sign up';
+            return;
+        } else {
+            result = await supabase.auth.signInWithPassword({ email, password });
+            if (result.error) throw result.error;
+        }
+        currentUser = result.data.user;
+        await loadUserRole();
+    } catch (e) {
+        $('authError').textContent = e.message || 'Authentication failed.';
+        $('authSubmit').disabled = false;
+        $('authSubmit').textContent = isSignUp ? 'Sign up' : 'Sign in';
+    }
+});
+
+async function checkSession() {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+        currentUser = data.session.user;
+        await loadUserRole();
+        return true;
+    }
+    return false;
+}
+
+async function loadUserRole() {
+    if (!currentUser) return;
+    const { data: coachData } = await supabase
+        .from('coaches')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .single();
+    if (coachData) {
+        currentRole = 'coach';
+        showCoachUI();
+        loadClients();
+        return;
+    }
+    const { data: clientData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .single();
+    if (clientData) {
+        currentRole = 'client';
+        currentClientId = clientData.id;
+        showClientUI();
+        loadClientProgram(clientData.id);
+        return;
+    }
+    const { error } = await supabase
+        .from('coaches')
+        .insert([{ user_id: currentUser.id, name: currentUser.email?.split('@')[0] || 'Coach' }]);
+    if (!error) {
+        currentRole = 'coach';
+        showCoachUI();
+        loadClients();
+    } else {
+        toast('Error setting up profile.');
+    }
+}
+
+function showCoachUI() {
+    $('authPage').style.display = 'none';
+    $('mainContent').style.display = 'block';
+    $('header').style.display = 'flex';
+    $('roleBadge').textContent = 'Coach';
+    showView('dashboard');
+}
+
+function showClientUI() {
+    $('authPage').style.display = 'none';
+    $('mainContent').style.display = 'block';
+    $('header').style.display = 'flex';
+    $('roleBadge').textContent = 'Client';
+    showView('tracker');
+}
+
+function showView(view) {
+    ['dashboardView', 'detailView', 'builderView', 'trackerView'].forEach(id => {
+        $(id).style.display = id === view ? 'block' : 'none';
+    });
+}
+
+async function loadClients() {
+    if (currentRole !== 'coach') return;
+    const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('coach_id', currentUser.id);
+    if (error) {
+        toast('Error loading clients');
+        return;
+    }
+    clients = data || [];
+    renderClients();
+    updateStats();
+}
+
+function renderClients(filter = 'all') {
+    const grid = $('clientGrid');
+    let filtered = clients;
+    if (filter === 'active') filtered = clients.filter(c => c.status === 'active');
+    else if (filter === 'quiet') filtered = clients.filter(c => c.status === 'quiet');
+    if (!filtered.length) {
+        grid.innerHTML = '<div class="text-muted text-center" style="padding:60px 20px;">No clients found.</div>';
+        return;
+    }
+    grid.innerHTML = filtered.map(c => `
+        <div class="client-card" data-id="${c.id}">
+            <div class="name">${c.name || 'Unnamed'}</div>
+            <div class="meta">${c.type || 'Client'} · Last seen: ${c.last_seen || '—'}</div>
+            <div class="flex gap-8" style="margin-top:10px;">
+                <span class="badge ${c.status === 'active' ? 'badge-green' : 'badge-amber'}">
+                    <span class="dot ${c.status === 'active' ? 'dot-green' : 'dot-amber'}"></span> ${c.status || 'New'}
+                </span>
+                ${c.has_pb ? '<span class="badge badge-blue">🏆 PB</span>' : ''}
+            </div>
+        </div>
+    `).join('');
+    grid.querySelectorAll('.client-card').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = el.dataset.id;
+            const client = clients.find(c => c.id === id);
+            if (client) openClientDetail(client);
+        });
+    });
+}
+
+function updateStats() {
+    $('statTotal').textContent = clients.length;
+    $('statActive').textContent = clients.filter(c => c.status === 'active').length;
+    $('statQuiet').textContent = clients.filter(c => c.status === 'quiet').length;
+    $('statPBs').textContent = clients.filter(c => c.has_pb).length;
+    $('clientCount').textContent = `${clients.length} client${clients.length !== 1 ? 's' : ''}`;
+}
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderClients(btn.dataset.filter);
+    });
+});
+
+async function openClientDetail(client) {
+    currentClientId = client.id;
+    showView('detailView');
+    $('detailName').textContent = client.name || 'Unnamed';
+    $('detailMeta').textContent = `Last seen: ${client.last_seen || '—'} · ${client.type || 'Client'}`;
+    await loadClientDetail(client.id);
+    document.querySelectorAll('.detail-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            const target = $(`tab-${tab.dataset.tab}`);
+            if (target) target.classList.add('active');
+        });
+    });
+}
+
+async function loadClientDetail(clientId) {
+    const { data: progData } = await supabase
+        .from('programs')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+    if (progData && progData.length) {
+        currentProgram = progData[0];
+        let days;
+        try {
+            days = typeof currentProgram.days === 'string' ? JSON.parse(currentProgram.days) : currentProgram.days;
+        } catch(e) {
+            days = [];
+        }
+        $('tab-program').innerHTML = days.map((d, i) => `
+            <div style="background:#fff;border:1px solid #E3E6EE;border-radius:12px;margin-bottom:12px;overflow:hidden;">
+                <div style="background:#141414;color:#fff;padding:10px 16px;font-weight:800;">${d.name || `Day ${i+1}`}</div>
+                ${(d.exercises || []).map(ex => `
+                    <div style="padding:10px 16px;border-top:1px solid #E3E6EE;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <strong>${ex.name || 'Exercise'}</strong>
+                            <div class="text-muted text-sm">${ex.sets || '—'} × ${ex.reps || '—'} · rest ${ex.rest || '—'}s</div>
+                            ${ex.guide ? `<div class="text-sm" style="color:#0066FF;">@${ex.guide}</div>` : ''}
+                        </div>
+                        <span class="badge badge-grey">${ex.sets || '—'} sets</span>
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
+    } else {
+        $('tab-program').innerHTML = '<p class="text-muted">No program assigned.</p>';
+    }
+    const { data: sessions } = await supabase
+        .from('workout_sessions')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('date', { ascending: false })
+        .limit(10);
+    if (sessions && sessions.length) {
+        $('tab-progress').innerHTML = sessions.map(s => `
+            <div style="padding:8px 0;border-bottom:1px solid #E3E6EE;">
+                <strong>${s.date || '—'}</strong> · ${s.exercises_completed || 0} exercises
+            </div>
+        `).join('');
+    } else {
+        $('tab-progress').innerHTML = '<p class="text-muted">No sessions logged yet.</p>';
+    }
+    $('tab-overview').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div style="background:#fff;padding:16px;border-radius:12px;border:1px solid #E3E6EE;">
+                <div class="text-muted text-xs">Adherence</div>
+                <div class="fw-900" style="font-size:24px;">${client.adherence || '—'}</div>
+            </div>
+            <div style="background:#fff;padding:16px;border-radius:12px;border:1px solid #E3E6EE;">
+                <div class="text-muted text-xs">Current Weight</div>
+                <div class="fw-900" style="font-size:24px;">${client.current_weight || '—'} kg</div>
+            </div>
+            <div style="background:#fff;padding:16px;border-radius:12px;border:1px solid #E3E6EE;">
+                <div class="text-muted text-xs">Goal</div>
+                <div class="fw-900" style="font-size:24px;">${client.goal || '—'}</div>
+            </div>
+        </div>
+    `;
+}
+
+$('backToDashboard').addEventListener('click', () => showView('dashboard'));
+$('builderBack').addEventListener('click', () => showView('dashboard'));
+$('trackerBack').addEventListener('click', () => {
+    if (currentRole === 'client') showView('tracker');
+    else showView('dashboard');
+});
+
+$('newClientBtn').addEventListener('click', async () => {
+    const name = prompt('Client name:');
+    if (!name) return;
+    const type = confirm('Online client? (Cancel for Face-to-Face)') ? 'online' : 'face-to-face';
+    const { error } = await supabase
+        .from('clients')
+        .insert([{ name, type, coach_id: currentUser.id, status: 'active', created_at: new Date().toISOString() }]);
+    if (error) {
+        toast('Error: ' + error.message);
+        return;
+    }
+    toast('Client added!');
+    loadClients();
+});
+
+$('assignProgramBtn').addEventListener('click', () => {
+    if (!currentClientId) {
+        toast('No client selected');
+        return;
+    }
+    showView('builderView');
+    $('builderInput').value = '';
+    $('builderPreview').innerHTML = '<div class="text-muted text-center" style="padding:60px 20px;">Build a program and save it to assign to this client.</div>';
+    toast('Build a program and click Save Program');
+});
+
+$('newProgramBtn').addEventListener('click', () => {
+    showView('builderView');
+    $('builderInput').value = '';
+    $('builderPreview').innerHTML = '<div class="text-muted text-center" style="padding:60px 20px;">Paste a program and click Parse</div>';
+});
+
+$('clearBuilderBtn').addEventListener('click', () => {
+    $('builderInput').value = '';
+    $('builderPreview').innerHTML = '<div class="text-muted text-center" style="padding:60px 20px;">Paste a program and click Parse</div>';
+});
+
+$('loadExampleBtn').addEventListener('click', () => {
+    $('builderInput').value = `Dinny – Next 6 Weeks (Hypertrophy)
+
+Day 1 – Chest & Arms
+• Flat Barbell Bench Press – 4×6-8 @70kg
+70 / 75 / 77.5 / 80
+• Weighted Pull-Ups – 4×6-8 rest 150
+5 / 5 / 7.5 / 10
+
+Day 2 – Quads & Shoulders
+• Hack Squat – 4×6-8
+60 / 70 / 70 / 75
+• Barbell Squat – 3×8-10 @60
+
+Progression
+• Hit the top of the rep range on every set → add weight next week.`;
+    toast('Example loaded
