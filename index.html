@@ -9,7 +9,6 @@
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:Roboto,sans-serif;background:#F6F7FB;color:#141414}
-        :root{--blue:#0066FF;--ink:#141414;--white:#fff;--lgrey:#EAEBF3;--mgrey:#73787A}
         .container{max-width:1200px;margin:0 auto;padding:0 20px}
         .header{background:#141414;color:#fff;padding:12px 0;border-bottom:3px solid #0066FF;position:sticky;top:0;z-index:100}
         .header .container{display:flex;justify-content:space-between;align-items:center}
@@ -131,9 +130,10 @@
 <div class="rest-timer" id="restTimer" style="display:none;"><span class="time" id="restTime">60</span><span class="text-muted text-sm">s</span><div class="controls"><button id="restStartBtn">Start</button><button id="restSkipBtn">Skip</button></div></div>
 <button class="complete-btn" id="completeWorkoutBtn" disabled>Complete Workout</button></div>
 </div></main></div>
+
 <script>
 // ============================================================
-// SUPABASE CONFIGURATION - HARD CODED (FINAL VERSION)
+// SUPABASE CONFIGURATION - HARD CODED
 // ============================================================
 const SUPABASE_URL = 'https://xeqsoftmkutpezzilxjmb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_recJqXh_JuHf9Cb8E_zuJA_RJVMQUo7';
@@ -142,6 +142,7 @@ console.log('🚀 App starting...');
 console.log('📡 Supabase URL:', SUPABASE_URL);
 console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
 
+// This is the ONLY declaration of supabase
 const supabase = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
