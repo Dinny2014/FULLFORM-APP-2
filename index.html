@@ -117,11 +117,11 @@
 <div class="auth-page" id="authPage"><div class="auth-card"><h1>FULLFORM</h1><p>Client Management</p><div id="authForm"><label>Email</label><input type="email" id="authEmail" placeholder="you@example.com"><label>Password</label><input type="password" id="authPassword" placeholder="••••••••"><div id="authError" class="error"></div><button class="btn btn-primary" id="authSubmit">Sign in</button><div class="switch"><span id="authSwitchText">Don't have an account?</span><a id="authSwitchLink">Sign up</a></div></div></div></div>
 <main id="mainContent" style="display:none;"><div class="container">
 <div id="dashboardView" class="dashboard"><div class="dashboard-header"><div><h1>Clients</h1><div class="sub" id="clientCount">0 clients</div></div><div class="flex gap-8"><button class="btn btn-primary btn-sm" id="newProgramBtn">+ New Program</button><button class="btn btn-secondary btn-sm" id="newClientBtn">+ Add Client</button></div></div>
-<div class="stats" id="statsRow"><div class="stat-card"><div class="num" id="statTotal">0</div><div class="label">Total</div></div><div class="stat-card"><div class="num" id="statActive">0</div><div class="label">Active</div></div><div class="stat-card"><div class="num" id="statQuiet">0</div><div class="label">Gone Quiet</div></div><div class="stat-card"><div class="num" id="statPBs">0</div><div class="label">New PBs</div></div></div>
-<div class="filters" id="filterRow"><button class="filter-btn active" data-filter="all">All</button><button class="filter-btn" data-filter="active">Active</button><button class="filter-btn" data-filter="quiet">Gone Quiet</button><button class="filter-btn" data-filter="online">Online</button><button class="filter-btn" data-filter="f2f">Face-to-Face</button></div>
+<div class="stats"><div class="stat-card"><div class="num" id="statTotal">0</div><div class="label">Total</div></div><div class="stat-card"><div class="num" id="statActive">0</div><div class="label">Active</div></div><div class="stat-card"><div class="num" id="statQuiet">0</div><div class="label">Gone Quiet</div></div><div class="stat-card"><div class="num" id="statPBs">0</div><div class="label">New PBs</div></div></div>
+<div class="filters"><button class="filter-btn active" data-filter="all">All</button><button class="filter-btn" data-filter="active">Active</button><button class="filter-btn" data-filter="quiet">Gone Quiet</button><button class="filter-btn" data-filter="online">Online</button><button class="filter-btn" data-filter="f2f">Face-to-Face</button></div>
 <div class="client-grid" id="clientGrid"><div class="loading"><div class="spinner"></div> Loading clients...</div></div></div>
 <div id="detailView" class="client-detail" style="display:none;"><div class="back-link" id="backToDashboard">← Back to clients</div><div class="detail-header"><div><h1 id="detailName">Client Name</h1><div class="text-muted text-sm" id="detailMeta">Last seen: —</div></div><div class="flex gap-8"><button class="btn btn-primary btn-sm" id="assignProgramBtn">Assign Program</button><button class="btn btn-secondary btn-sm" id="assessBtn">Assessment</button></div></div>
-<div class="detail-tabs" id="detailTabs"><div class="detail-tab active" data-tab="overview">Overview</div><div class="detail-tab" data-tab="program">Program</div><div class="detail-tab" data-tab="progress">Progress</div><div class="detail-tab" data-tab="photos">Photos</div></div>
+<div class="detail-tabs"><div class="detail-tab active" data-tab="overview">Overview</div><div class="detail-tab" data-tab="program">Program</div><div class="detail-tab" data-tab="progress">Progress</div><div class="detail-tab" data-tab="photos">Photos</div></div>
 <div id="detailContent"><div class="tab-content active" id="tab-overview"><div class="loading"><div class="spinner"></div> Loading...</div></div><div class="tab-content" id="tab-program"><p class="text-muted">No program assigned.</p></div><div class="tab-content" id="tab-progress"><p class="text-muted">No progress data yet.</p></div><div class="tab-content" id="tab-photos"><p class="text-muted">No photos uploaded.</p></div></div></div>
 <div id="builderView" class="builder" style="display:none;"><div class="flex-between mb-16"><div><h1 class="fw-900" style="font-size:28px;">Program Builder</h1><div class="text-muted text-sm">Paste your program or build from scratch</div></div><div class="flex gap-8"><button class="btn btn-secondary btn-sm" id="builderBack">← Back</button><button class="btn btn-primary btn-sm" id="saveProgramBtn">Save Program</button></div></div>
 <div class="paste-area"><div><label class="fw-700 text-sm">Paste program text</label><textarea id="builderInput" placeholder="Day 1 – Chest & Arms&#10;• Bench Press – 4×6-8 @70kg&#10;70 / 75 / 77.5 / 80"></textarea><div class="flex gap-8 mt-8"><button class="btn btn-primary btn-sm" id="parseBtn">Parse →</button><button class="btn btn-secondary btn-sm" id="loadExampleBtn">Load Example</button><button class="btn btn-secondary btn-sm" id="clearBuilderBtn">Clear</button></div></div>
@@ -234,7 +234,6 @@ async function loadUserRole() {
         currentRole = 'client';
         currentClientId = clientData.id;
         showClientUI();
-        loadClientProgram(clientData.id);
         return;
     }
     const { error } = await supabase
@@ -471,8 +470,46 @@ Day 1 – Chest & Arms
 Day 2 – Quads & Shoulders
 • Hack Squat – 4×6-8
 60 / 70 / 70 / 75
-• Barbell Squat – 3×8-10 @60
-
-Progression
+• Barbell Squat – 3×8-10 @60Progression
 • Hit the top of the rep range on every set → add weight next week.`;
-    toast('Example loaded
+    toast('Example loaded');
+});
+
+$('parseBtn').addEventListener('click', () => {
+    const text = $('builderInput').value.trim();
+    if (!text) {
+        toast('Paste a program first');
+        return;
+    }
+    // Simple parse - just show a preview
+    const lines = text.split('\n').filter(l => l.trim());
+    let preview = '<div class="fw-800" style="font-size:18px;">Program Preview</div>';
+    preview += '<div class="text-muted text-sm">' + lines.length + ' lines parsed</div>';
+    preview += lines.map(l => `<div style="padding:4px 0;border-bottom:1px solid #E3E6EE;font-size:13px;">${l}</div>`).join('');
+    preview += `<button class="btn btn-primary btn-sm mt-8" id="saveParsedBtn">Save Program</button>`;
+    $('builderPreview').innerHTML = preview;
+    setTimeout(() => {
+        const saveBtn = $('saveParsedBtn');
+        if (saveBtn) saveBtn.addEventListener('click', () => {
+            toast('Program saved! (Demo)');
+        });
+    }, 50);
+});
+
+$('saveProgramBtn').addEventListener('click', () => {
+    toast('Program saved! (Demo)');
+});
+
+$('assessBtn').addEventListener('click', () => {
+    toast('📊 Assessment tools coming soon!');
+});
+
+$('logoutBtn').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    location.reload();
+});
+
+checkSession();
+</script>
+</body>
+</html>
