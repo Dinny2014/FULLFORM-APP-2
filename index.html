@@ -133,13 +133,14 @@
 </div></main></div>
 <script>
 // ============================================================
-// SUPABASE CONFIGURATION - HARD CODED
+// SUPABASE CONFIGURATION - HARD CODED (FINAL VERSION)
 // ============================================================
 const SUPABASE_URL = 'https://xeqsoftmkutpezzilxjmb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_recJqXh_JuHf9Cb8E_zuJA_RJVMQUo7';
 
-console.log('✅ SUPABASE_URL:', SUPABASE_URL);
-console.log('✅ SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
+console.log('🚀 App starting...');
+console.log('📡 Supabase URL:', SUPABASE_URL);
+console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
 
 const supabase = window.supabase.createClient(
     SUPABASE_URL,
@@ -148,7 +149,6 @@ const supabase = window.supabase.createClient(
 );
 
 console.log('✅ Supabase client created!');
-console.log('✅ Auth available:', typeof supabase.auth);
 
 // ============================================================
 // APP STATE
@@ -203,7 +203,7 @@ $('authSubmit').addEventListener('click', async () => {
         if (isSignUp) {
             result = await supabase.auth.signUp({ email, password });
             if (result.error) throw result.error;
-            toast('Check your email to confirm!');
+            toast('✅ Check your email to confirm!');
             $('authSubmit').disabled = false;
             $('authSubmit').textContent = 'Sign up';
             return;
@@ -224,9 +224,8 @@ async function checkSession() {
     console.log('🔍 Checking session...');
     try {
         const { data, error } = await supabase.auth.getSession();
-        console.log('Session data:', data);
         if (error) {
-            console.log('Session error:', error);
+            console.log('❌ Session error:', error);
             return false;
         }
         if (data.session) {
@@ -248,7 +247,7 @@ async function loadUserRole() {
     console.log('🔄 Loading user role for:', currentUser.email);
     try {
         // Check if coach
-        const { data: coachData, error: coachError } = await supabase
+        const { data: coachData } = await supabase
             .from('coaches')
             .select('*')
             .eq('user_id', currentUser.id)
@@ -260,7 +259,7 @@ async function loadUserRole() {
             return;
         }
         // Check if client
-        const { data: clientData, error: clientError } = await supabase
+        const { data: clientData } = await supabase
             .from('clients')
             .select('*')
             .eq('user_id', currentUser.id)
@@ -272,7 +271,7 @@ async function loadUserRole() {
             return;
         }
         // Create coach profile
-        console.log('Creating coach profile...');
+        console.log('📝 Creating coach profile...');
         const { error: insertError } = await supabase
             .from('coaches')
             .insert([{ user_id: currentUser.id, name: currentUser.email?.split('@')[0] || 'Coach' }]);
