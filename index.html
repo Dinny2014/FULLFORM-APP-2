@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FULLFORM · Client Management</title>
+    <title>FULLFORM</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;800;900&display=swap" rel="stylesheet" />
     <style>
@@ -133,7 +133,7 @@
 
 <script>
 // ============================================================
-// SUPABASE CONFIGURATION - HARD CODED
+// SUPABASE CONFIGURATION - HARD CODED (ONLY ONE DECLARATION)
 // ============================================================
 const SUPABASE_URL = 'https://xeqsoftmkutpezzilxjmb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_recJqXh_JuHf9Cb8E_zuJA_RJVMQUo7';
@@ -142,7 +142,7 @@ console.log('🚀 App starting...');
 console.log('📡 Supabase URL:', SUPABASE_URL);
 console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
 
-// This is the ONLY declaration of supabase
+// THIS IS THE ONLY DECLARATION OF 'supabase'
 const supabase = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
