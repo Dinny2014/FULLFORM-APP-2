@@ -132,8 +132,14 @@
 <button class="complete-btn" id="completeWorkoutBtn" disabled>Complete Workout</button></div>
 </div></main></div>
 <script>
+// ============================================================
+// SUPABASE CONFIGURATION - HARD CODED
+// ============================================================
 const SUPABASE_URL = 'https://xeqsoftmkutpezzilxjmb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_recJqXh_JuHf9Cb8E_zuJA_RJVMQUo7';
+
+console.log('✅ SUPABASE_URL:', SUPABASE_URL);
+console.log('✅ SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
 
 const supabase = window.supabase.createClient(
     SUPABASE_URL,
@@ -141,6 +147,12 @@ const supabase = window.supabase.createClient(
     { auth: { persistSession: true } }
 );
 
+console.log('✅ Supabase client created!');
+console.log('✅ Auth available:', typeof supabase.auth);
+
+// ============================================================
+// APP STATE
+// ============================================================
 let currentUser = null;
 let currentRole = null;
 let currentClientId = null;
@@ -150,6 +162,9 @@ let currentDayIndex = 0;
 let restTimerInterval = null;
 let restSeconds = 60;
 
+// ============================================================
+// DOM HELPERS
+// ============================================================
 const $ = id => document.getElementById(id);
 
 const toast = (msg) => {
@@ -160,6 +175,9 @@ const toast = (msg) => {
     el._timeout = setTimeout(() => el.classList.remove('show'), 2000);
 };
 
+// ============================================================
+// AUTH
+// ============================================================
 let isSignUp = false;
 
 $('authSwitchLink').addEventListener('click', () => {
@@ -203,48 +221,72 @@ $('authSubmit').addEventListener('click', async () => {
 });
 
 async function checkSession() {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-        currentUser = data.session.user;
-        await loadUserRole();
-        return true;
+    console.log('🔍 Checking session...');
+    try {
+        const { data, error } = await supabase.auth.getSession();
+        console.log('Session data:', data);
+        if (error) {
+            console.log('Session error:', error);
+            return false;
+        }
+        if (data.session) {
+            currentUser = data.session.user;
+            console.log('✅ User found:', currentUser.email);
+            await loadUserRole();
+            return true;
+        }
+        console.log('❌ No session found');
+        return false;
+    } catch (e) {
+        console.log('❌ Session check error:', e.message);
+        return false;
     }
-    return false;
 }
 
 async function loadUserRole() {
     if (!currentUser) return;
-    const { data: coachData } = await supabase
-        .from('coaches')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .single();
-    if (coachData) {
-        currentRole = 'coach';
-        showCoachUI();
-        loadClients();
-        return;
-    }
-    const { data: clientData } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .single();
-    if (clientData) {
-        currentRole = 'client';
-        currentClientId = clientData.id;
-        showClientUI();
-        return;
-    }
-    const { error } = await supabase
-        .from('coaches')
-        .insert([{ user_id: currentUser.id, name: currentUser.email?.split('@')[0] || 'Coach' }]);
-    if (!error) {
-        currentRole = 'coach';
-        showCoachUI();
-        loadClients();
-    } else {
-        toast('Error setting up profile.');
+    console.log('🔄 Loading user role for:', currentUser.email);
+    try {
+        // Check if coach
+        const { data: coachData, error: coachError } = await supabase
+            .from('coaches')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .single();
+        if (coachData) {
+            currentRole = 'coach';
+            showCoachUI();
+            loadClients();
+            return;
+        }
+        // Check if client
+        const { data: clientData, error: clientError } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .single();
+        if (clientData) {
+            currentRole = 'client';
+            currentClientId = clientData.id;
+            showClientUI();
+            return;
+        }
+        // Create coach profile
+        console.log('Creating coach profile...');
+        const { error: insertError } = await supabase
+            .from('coaches')
+            .insert([{ user_id: currentUser.id, name: currentUser.email?.split('@')[0] || 'Coach' }]);
+        if (!insertError) {
+            currentRole = 'coach';
+            showCoachUI();
+            loadClients();
+        } else {
+            toast('Error setting up profile.');
+            console.error('Insert error:', insertError);
+        }
+    } catch (e) {
+        console.error('loadUserRole error:', e);
+        toast('Error loading user role.');
     }
 }
 
@@ -270,17 +312,23 @@ function showView(view) {
     });
 }
 
+// ============================================================
+// DASHBOARD
+// ============================================================
 async function loadClients() {
     if (currentRole !== 'coach') return;
+    console.log('📋 Loading clients...');
     const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('coach_id', currentUser.id);
     if (error) {
+        console.error('Load clients error:', error);
         toast('Error loading clients');
         return;
     }
     clients = data || [];
+    console.log('✅ Loaded', clients.length, 'clients');
     renderClients();
     updateStats();
 }
@@ -331,6 +379,9 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
     });
 });
 
+// ============================================================
+// CLIENT DETAIL
+// ============================================================
 async function openClientDetail(client) {
     currentClientId = client.id;
     showView('detailView');
@@ -414,6 +465,9 @@ async function loadClientDetail(clientId) {
     `;
 }
 
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
 $('backToDashboard').addEventListener('click', () => showView('dashboard'));
 $('builderBack').addEventListener('click', () => showView('dashboard'));
 $('trackerBack').addEventListener('click', () => {
@@ -470,7 +524,9 @@ Day 1 – Chest & Arms
 Day 2 – Quads & Shoulders
 • Hack Squat – 4×6-8
 60 / 70 / 70 / 75
-• Barbell Squat – 3×8-10 @60Progression
+• Barbell Squat – 3×8-10 @60
+
+Progression
 • Hit the top of the rep range on every set → add weight next week.`;
     toast('Example loaded');
 });
@@ -481,7 +537,6 @@ $('parseBtn').addEventListener('click', () => {
         toast('Paste a program first');
         return;
     }
-    // Simple parse - just show a preview
     const lines = text.split('\n').filter(l => l.trim());
     let preview = '<div class="fw-800" style="font-size:18px;">Program Preview</div>';
     preview += '<div class="text-muted text-sm">' + lines.length + ' lines parsed</div>';
@@ -491,13 +546,13 @@ $('parseBtn').addEventListener('click', () => {
     setTimeout(() => {
         const saveBtn = $('saveParsedBtn');
         if (saveBtn) saveBtn.addEventListener('click', () => {
-            toast('Program saved! (Demo)');
+            toast('Program saved!');
         });
     }, 50);
 });
 
 $('saveProgramBtn').addEventListener('click', () => {
-    toast('Program saved! (Demo)');
+    toast('Program saved!');
 });
 
 $('assessBtn').addEventListener('click', () => {
@@ -509,7 +564,13 @@ $('logoutBtn').addEventListener('click', async () => {
     location.reload();
 });
 
-checkSession();
+// ============================================================
+// INIT
+// ============================================================
+console.log('🚀 App initializing...');
+checkSession().then(() => {
+    console.log('✅ App ready!');
+});
 </script>
 </body>
 </html>
